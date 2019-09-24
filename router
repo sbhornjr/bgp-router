@@ -38,14 +38,16 @@ CUST = "cust"
 PEER = "peer"
 PROV = "prov"
 
+BNRY = "binary"
+
 
 ##########################################################################################
 
 class Router:
-    routes = None
-    updates = None
-    relations = None
-    sockets = None
+    routes = None    # array of dictionaries that are forwarding table entries
+    updates = None   # array of update messages received
+    relations = None # dictionary of network - relation
+    sockets = None   # dictionary of network - socket
 
     def __init__(self, networks):
         self.routes = {}
@@ -128,9 +130,38 @@ class Router:
         # TODO (this is the most difficult task, save until last)
         return False
 
+    def getbinary(self, numbers):
+        totalbinary = ""
+        for num in numbers:
+            binary = bin(int(num))
+            while len(binary) < 10:
+                binary += '0'
+            totalbinary += binary[2:]
+
+        return totalbinary
+
     def update(self, srcif, packet):
         """	handle update packets	"""
         # TODO
+        network = packet[MESG][NTWK]
+        netmask = packet[MESG][NMSK]
+        entry = {}
+        entry[NTWK] = network
+        entry[NMSK] = 0
+        entry[DEST] = srcif
+
+        netwkbinary = self.getbinary(network.split('.'))
+        entry[BNRY] = netwkbinary
+
+        netmskbinary = self.getbinary(netmask.split('.'))
+        for char in netmskbinary:
+            if (char == '1'):
+                entry[NMSK] += 1
+            else:
+                break
+
+        print entry
+
         return False
 
     def revoke(self, packet):
@@ -146,7 +177,15 @@ class Router:
     def handle_packet(self, srcif, packet):
         """	dispatches a packet """
         # TODO
-        return False
+        type = packet[TYPE]
+        if (type == UPDT):
+            self.update(srcif, packet)
+        elif (type == DATA):
+            self.forward(srcif, packet)
+        elif (type == DUMP):
+            self.dump(packet)
+        else:
+            return False
 
     def send_error(self, conn, msg):
         """ Send a no_route error message """
@@ -167,6 +206,7 @@ class Router:
                         if self.sockets[sock] == conn:
                             srcif = sock
                     msg = json.loads(k)
+                    print(msg)
                     if not self.handle_packet(srcif, msg):
                         self.send_error(conn, msg)
                 else:
