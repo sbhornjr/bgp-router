@@ -145,13 +145,7 @@ class Router:
         # TODO
         network = packet[MESG][NTWK]
         netmask = packet[MESG][NMSK]
-        entry = {}
-        entry[NTWK] = network
-        entry[NMSK] = 0
-        entry[DEST] = srcif
-
-        netwkbinary = self.getbinary(network.split('.'))
-        entry[BNRY] = netwkbinary
+        entry = {NTWK: network, NMSK: 0, DEST: srcif}
 
         netmskbinary = self.getbinary(netmask.split('.'))
         for char in netmskbinary:
@@ -160,9 +154,14 @@ class Router:
             else:
                 break
 
-        print entry
-
-        return False
+        netwkbinary = self.getbinary(network.split('.'))
+        i = 0
+        netwkbinarylist = list(netwkbinary)
+        for item in netwkbinarylist:
+            i += 1
+            if (i > entry[NMSK]):
+                netwkbinarylist[i - 1] = '*'
+        entry[BNRY] = "".join(netwkbinarylist)
 
     def revoke(self, packet):
         """	handle revoke packets	"""
