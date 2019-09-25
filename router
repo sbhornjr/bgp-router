@@ -40,6 +40,7 @@ PROV = "prov"
 
 BNRY = "binary"
 LGTH = "length"
+NMSKNUM = "netmask number"
 
 
 ##########################################################################################
@@ -199,12 +200,12 @@ class Router:
         """	handle update packets	"""
         network = packet[MESG][NTWK]
         netmask = packet[MESG][NMSK]
-        entry = {NTWK: network, NMSK: 0, DEST: srcif}
+        entry = {NTWK: network, NMSK: netmask, PEER: srcif, NMSKNUM: 0 }
 
         netmskbinary = self.getbinary(netmask.split('.'))
         for char in netmskbinary:
             if char == '1':
-                entry[NMSK] += 1
+                entry[NMSKNUM] += 1
             else:
                 break
 
@@ -213,7 +214,7 @@ class Router:
         netwkbinarylist = list(netwkbinary)
         for item in netwkbinarylist:
             i += 1
-            if i > entry[NMSK]:
+            if i > entry[NMSKNUM]:
                 netwkbinarylist[i - 1] = '*'
         entry[BNRY] = "".join(netwkbinarylist)
 
@@ -228,7 +229,21 @@ class Router:
 
     def dump(self, packet):
         """	handles dump table requests	"""
-        # TODO
+        packet_source = packet[SRCE]
+        packet[SRCE] =packet[DEST]
+        packet[DEST] = packet_source
+
+        dump_routes = self.routes
+        for route in dump_routes:
+            del route[NMSKNUM]
+            del route[BNRY]
+
+        packet[MESG] = dump_routes
+        packet[TYPE] = "table"
+
+        sock = self.sockets[packet[DEST]]
+
+        sock.sendall(json.dumps(packet))
         return True
 
     def handle_packet(self, srcif, packet):
