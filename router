@@ -38,18 +38,20 @@ CUST = "cust"
 PEER = "peer"
 PROV = "prov"
 
+BNRY = "binary"
+
 
 ##########################################################################################
 
 class Router:
-    routes = None
-    updates = None
-    relations = None
-    sockets = None
+    routes = None     # array of dictionaries that are forwarding table entries
+    updates = None    # array of update messages received
+    relations = None  # dictionary of network - relation
+    sockets = None    # dictionary of network - socket
 
     def __init__(self, networks):
-        self.routes = {}
-        self.updates = {}
+        self.routes = []
+        self.updates = []
         self.relations = {}
         self.sockets = {}
         for relationship in networks:
@@ -118,9 +120,26 @@ class Router:
             routes = self.filter_relationships(srcif, routes)
         return self.sockets[peer] if peer else None
 
-    def forward(self, srcif, packet):
-        """	Forward a data packet	"""
-        # TODO
+    def forwardupdatesrevokes(self, srcif, packet):
+        """	Forward a data packet of type update or revoke	"""
+        for sock in self.sockets:
+            if sock != srcif:
+                destip = sock
+                packet[DEST] = destip
+                srciplist = destip.split(".")
+                i = 0
+                for ipbit in srciplist:
+                    if i == 3:
+                        srciplist[i] = "1"
+                    else:
+                        srciplist[i] += "."
+                        i += 1
+                srcip = "".join(srciplist)
+                packet[SRCE] = srcip
+                print "SENDING TO ", destip, packet
+                self.sockets[sock].sendall(json.dumps(packet))
+
+    def forwarddata(self, srcif, packet):
         return False
 
     def coalesce(self):
@@ -128,10 +147,43 @@ class Router:
         # TODO (this is the most difficult task, save until last)
         return False
 
+    def getbinary(self, numbers):
+        totalbinary = ""
+        for num in numbers:
+            binary = bin(int(num))
+            while len(binary) < 10:
+                binary += '0'
+            totalbinary += binary[2:]
+
+        return totalbinary
+
     def update(self, srcif, packet):
         """	handle update packets	"""
-        # TODO
-        return False
+        network = packet[MESG][NTWK]
+        netmask = packet[MESG][NMSK]
+        entry = {NTWK: network, NMSK: 0, DEST: srcif}
+
+        netmskbinary = self.getbinary(netmask.split('.'))
+        for char in netmskbinary:
+            if char == '1':
+                entry[NMSK] += 1
+            else:
+                break
+
+        netwkbinary = self.getbinary(network.split('.'))
+        i = 0
+        netwkbinarylist = list(netwkbinary)
+        for item in netwkbinarylist:
+            i += 1
+            if i > entry[NMSK]:
+                netwkbinarylist[i - 1] = '*'
+        entry[BNRY] = "".join(netwkbinarylist)
+
+        self.routes.append(entry)
+
+        print "ADDING TO TABLE: ", entry
+
+        self.forwardupdatesrevokes(srcif, packet)
 
     def revoke(self, packet):
         """	handle revoke packets	"""
@@ -146,7 +198,15 @@ class Router:
     def handle_packet(self, srcif, packet):
         """	dispatches a packet """
         # TODO
-        return False
+        type = packet[TYPE]
+        if (type == UPDT):
+            self.update(srcif, packet)
+        elif (type == DATA):
+            self.forwarddata(srcif, packet)
+        elif (type == DUMP):
+            self.dump(packet)
+        else:
+            return False
 
     def send_error(self, conn, msg):
         """ Send a no_route error message """
@@ -167,6 +227,7 @@ class Router:
                         if self.sockets[sock] == conn:
                             srcif = sock
                     msg = json.loads(k)
+                    print "PACKET RECEIVED: ", msg
                     if not self.handle_packet(srcif, msg):
                         self.send_error(conn, msg)
                 else:
