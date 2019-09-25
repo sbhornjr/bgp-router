@@ -163,6 +163,8 @@ class Router:
                 netwkbinarylist[i - 1] = '*'
         entry[BNRY] = "".join(netwkbinarylist)
 
+        print entry
+
     def revoke(self, packet):
         """	handle revoke packets	"""
         # TODO
