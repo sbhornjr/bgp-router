@@ -139,7 +139,7 @@ class Router:
                 print "SENDING TO ", destip, packet
                 self.sockets[sock].sendall(json.dumps(packet))
 
-    def forwarddata(selfself, srcif, packet):
+    def forwarddata(self, srcif, packet):
         return False
 
     def coalesce(self):
