@@ -38,9 +38,7 @@ CUST = "cust"
 PEER = "peer"
 PROV = "prov"
 
-BNRY = "binary"
 LGTH = "length"
-NMSKNUM = "netmask number"
 
 
 ##########################################################################################
@@ -76,6 +74,24 @@ class Router:
 
         return totalbinary
 
+    def masknetwork(self, network, netmask):
+        netmsknum = 0
+        netmskbinary = self.getbinary(netmask.split('.'))
+        for char in netmskbinary:
+            if char == '1':
+                netmsknum += 1
+            else:
+                break
+
+        i = 0
+        netwkbinarylist = list(self.getbinary(network.split('.')))
+        for item in netwkbinarylist:
+            i += 1
+            if i > netmsknum:
+                netwkbinarylist[i - 1] = '*'
+
+        return "".join(netwkbinarylist)
+
     def lookup_routes(self, daddr):
         """ Lookup all valid routes for an address """
         # TODO
@@ -84,7 +100,7 @@ class Router:
 
         for entry in self.routes:
             outroute = entry
-            entrybinary = outroute[BNRY]
+            entrybinary = self.masknetwork(outroute[NTWK], outroute[NMSK])
             i = 0
             for char in destbinary:
                 if char != entrybinary[i]:
@@ -168,6 +184,7 @@ class Router:
             if sock != srcif:
                 destip = sock
                 packet[DEST] = destip
+                destip = packet[SRCE]
                 srciplist = destip.split(".")
                 i = 0
                 for ipbit in srciplist:
@@ -200,23 +217,7 @@ class Router:
         """	handle update packets	"""
         network = packet[MESG][NTWK]
         netmask = packet[MESG][NMSK]
-        entry = {NTWK: network, NMSK: netmask, PEER: srcif, NMSKNUM: 0 }
-
-        netmskbinary = self.getbinary(netmask.split('.'))
-        for char in netmskbinary:
-            if char == '1':
-                entry[NMSKNUM] += 1
-            else:
-                break
-
-        netwkbinary = self.getbinary(network.split('.'))
-        i = 0
-        netwkbinarylist = list(netwkbinary)
-        for item in netwkbinarylist:
-            i += 1
-            if i > entry[NMSKNUM]:
-                netwkbinarylist[i - 1] = '*'
-        entry[BNRY] = "".join(netwkbinarylist)
+        entry = {NTWK: network, NMSK: netmask, PEER: srcif}
 
         self.routes.append(entry)
 
@@ -233,12 +234,7 @@ class Router:
         packet[SRCE] = packet[DEST]
         packet[DEST] = packet_source
 
-        dump_routes = self.routes
-        for route in dump_routes:
-            del route[NMSKNUM]
-            del route[BNRY]
-
-        packet[MESG] = dump_routes
+        packet[MESG] = self.routes
         packet[TYPE] = "table"
 
         sock = self.sockets[packet[DEST]]
