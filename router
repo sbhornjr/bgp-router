@@ -185,6 +185,7 @@ class Router:
                 destip = sock
                 packet[DEST] = destip
                 srciplist = destip.split(".")
+
                 i = 0
                 for ipbit in srciplist:
                     if i == 3:
