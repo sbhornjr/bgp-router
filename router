@@ -184,7 +184,6 @@ class Router:
             if sock != srcif:
                 destip = sock
                 packet[DEST] = destip
-                destip = packet[SRCE]
                 srciplist = destip.split(".")
                 i = 0
                 for ipbit in srciplist:
