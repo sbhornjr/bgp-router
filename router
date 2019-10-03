@@ -274,14 +274,19 @@ class Router:
 
         self.forwardupdatesrevokes(srcif, packet)
 
-    def revoke(self, packet):
+    def revoke(self, srcif, packet):
         """	handle revoke packets	"""
-        # TODO
-        print "Hello world/n/n"
-        print self.routes
-
-
-
+        deadNetworks = []
+        for rev in packet[MESG]:
+            deadNetworks.append(rev["network"])
+        deadRoutes = []
+        for route in self.routes:
+            if route["network"] in deadNetworks:
+                deadRoutes.append(route)
+        for route in deadRoutes:
+            if route["peer"] == packet[SRCE]:
+                self.routes.remove(route)
+        self.forwardupdatesrevokes(srcif, packet)
         return True
 
     def dump(self, packet):
@@ -309,7 +314,7 @@ class Router:
         elif (type == DUMP):
             self.dump(packet)
         elif (type == RVKE):
-            self.revoke(packet)
+            self.revoke(srcif, packet)
         else:
             return False
 
