@@ -222,7 +222,7 @@ class Router:
 
     def forwardupdatesrevokes(self, srcif, packet):
         """	Forward a data packet of type update or revoke	"""
-        if (packet[TYPE] != UPDT and packet[TYPE] != RVKE):
+        if packet[TYPE] != UPDT and packet[TYPE] != RVKE:
             return False
 
         for sock in self.sockets:
@@ -250,8 +250,8 @@ class Router:
 
         if sock:
             sock.sendall(json.dumps(packet))
-
-        self.send_error(srcif, packet)
+        else:
+            self.send_error(srcif, packet)
 
     def coalesce(self):
         """	coalesce any routes that are right next to each other	"""
@@ -297,19 +297,28 @@ class Router:
         """	dispatches a packet """
         # TODO
         type = packet[TYPE]
-        if (type == UPDT):
+        if type == UPDT:
             self.update(srcif, packet)
-        elif (type == DATA):
+        elif type == DATA:
             self.forwarddata(srcif, packet)
-        elif (type == DUMP):
+        elif type == DUMP:
             self.dump(packet)
         else:
             return False
+        return True
 
     def send_error(self, conn, msg):
         """ Send a no_route error message """
-        # TODO
-        return False
+        msg[MESG] = {}
+        for sock in self.sockets:
+            if sock == conn:
+                msg[DEST] = msg[SRCE]
+                sockparts = sock.split('.')
+                sockparts.pop()
+                sockparts.insert(3, '1')
+                msg[SRCE] = '.'.join(x.strip() for x in sockparts)
+                msg[TYPE] = "no route"
+                self.sockets[sock].sendall(json.dumps(msg))
 
     def run(self):
         while True:
