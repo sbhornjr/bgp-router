@@ -276,6 +276,7 @@ class Router:
 
     def revoke(self, srcif, packet):
         """	handle revoke packets	"""
+
         deadNetworks = []
         for rev in packet[MESG]:
             deadNetworks.append(rev["network"])
