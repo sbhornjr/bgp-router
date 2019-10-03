@@ -69,7 +69,7 @@ class Router:
         for num in numbers:
             binary = bin(int(num))
             while len(binary) < 10:
-                binary += '0'
+                binary = '0' + binary
             totalbinary += binary[2:]
 
         return totalbinary
@@ -94,7 +94,6 @@ class Router:
 
     def lookup_routes(self, daddr):
         """ Lookup all valid routes for an address """
-        # TODO
         outroutes = []
         destbinary = self.getbinary(daddr.split("."))
 
@@ -123,26 +122,72 @@ class Router:
 
     def get_shortest_as_path(self, routes):
         """ select the route with the shortest AS Path """
-        # TODO
-        outroutes = []
+        outroutes = routes
+        if len(outroutes) > 1:
+            path1 = outroutes[0][APTH]
+            path2 = outroutes[1][APTH]
+            if len(path1) < len(path2):
+                del outroutes[1]
+            elif len(path2) < len(path1):
+                del outroutes[0]
+
         return outroutes
 
     def get_highest_preference(self, routes):
-        """ select the route with the shortest AS Path """
-        # TODO
-        outroutes = []
+        """ select the route with the highest localpref """
+        outroutes = routes
+        if len(outroutes) > 1:
+            pref1 = outroutes[0][LPRF]
+            pref2 = outroutes[1][LPRF]
+            if pref1 > pref2:
+                del outroutes[1]
+            elif pref2 > pref1:
+                del outroutes[0]
+
         return outroutes
 
     def get_self_origin(self, routes):
         """ select self originating routes """
-        # TODO
-        outroutes = []
+        outroutes = routes
+        if len(outroutes) > 1:
+            sorg1 = outroutes[0][SORG]
+            sorg2 = outroutes[1][SORG]
+            if sorg1 == 'True' and sorg2 == 'False':
+                del outroutes[1]
+            elif sorg2 == 'True' and sorg1 == 'False':
+                del outroutes[0]
+
         return outroutes
 
     def get_origin_routes(self, routes):
-        """ select origin routes: EGP > IGP > UNK """
-        # TODO
-        outroutes = []
+        """ select origin routes: IGP > EGP > UNK """
+        outroutes = routes
+        if len(outroutes) > 1:
+            orig1 = outroutes[0][ORIG]
+            orig2 = outroutes[1][ORIG]
+
+            if orig1 == "IGP" and orig2 != "IGP":
+                del outroutes[1]
+            elif orig2 == "IGP" and orig1 != "IGP":
+                del outroutes[0]
+            elif orig1 == "EGP" and orig2 == "UNK":
+                del outroutes[1]
+            elif orig2 == "EGP" and orig1 == "UNK":
+                del outroutes[0]
+
+        return outroutes
+
+    def get_lowest_ip(self, routes):
+        """ select lowest ip """
+        outroutes = routes
+        if len(outroutes) > 1:
+            ip1 = outroutes[0][PEER]
+            ip2 = outroutes[1][PEER]
+            if ip1 < ip2:
+                del outroutes[1]
+            elif ip2 < ip1:
+                del outroutes[0]
+
         return outroutes
 
     def filter_relationships(self, srcif, routes):
@@ -166,9 +211,9 @@ class Router:
             # 4. EGP > IGP > UNK
             routes = self.get_origin_routes(routes)
             # 5. Lowest IP Address
-            # TODO
+            routes = self.get_lowest_ip(routes)
             # Final check: enforce peering relationships
-            routes = self.filter_relationships(srcif, routes)
+            #routes = self.filter_relationships(srcif, routes)
             peer = routes[0][PEER]
         elif len(routes) == 1:
             peer = routes[0][PEER]
@@ -198,7 +243,7 @@ class Router:
                 self.sockets[sock].sendall(json.dumps(packet))
 
     def forwarddata(self, srcif, packet):
-        if (packet[TYPE] != DATA):
+        if packet[TYPE] != DATA:
             return False
 
         sock = self.get_route(srcif, packet[DEST])
@@ -217,7 +262,13 @@ class Router:
         """	handle update packets	"""
         network = packet[MESG][NTWK]
         netmask = packet[MESG][NMSK]
-        entry = {NTWK: network, NMSK: netmask, PEER: srcif}
+        origin = packet[MESG][ORIG]
+        localpref = packet[MESG][LPRF]
+        aspath = packet[MESG][APTH]
+        selforigin = packet[MESG][SORG]
+
+        entry = {NTWK: network, NMSK: netmask, PEER: srcif, ORIG: origin,
+                 LPRF: localpref, APTH: aspath, SORG: selforigin}
 
         self.routes.append(entry)
 
