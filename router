@@ -46,12 +46,14 @@ LGTH = "length"
 class Router:
     routes = None     # array of dictionaries that are forwarding table entries
     updates = None    # array of update messages received
+    revokes = None    # array of revoke messages received
     relations = None  # dictionary of network - relation
     sockets = None    # dictionary of network - socket
 
     def __init__(self, networks):
         self.routes = []
         self.updates = []
+        self.revokes = []
         self.relations = {}
         self.sockets = {}
         for relationship in networks:
@@ -218,12 +220,16 @@ class Router:
         elif len(routes) == 1:
             peer = routes[0][PEER]
 
-        return self.sockets[peer] if peer else None
+        if peer:
+            return self.sockets[peer], peer
+        else:
+            return None, None
 
     def forwardupdatesrevokes(self, srcif, packet):
         """	Forward a data packet of type update or revoke	"""
-        if (packet[TYPE] != UPDT and packet[TYPE] != RVKE):
+        if packet[TYPE] != UPDT and packet[TYPE] != RVKE:
             return False
+        fromrelation = self.relations[srcif]
 
         for sock in self.sockets:
             if sock != srcif:
@@ -240,18 +246,27 @@ class Router:
                         i += 1
                 srcip = "".join(srciplist)
                 packet[SRCE] = srcip
-                self.sockets[sock].sendall(json.dumps(packet))
+                if fromrelation == "cust":
+                    self.sockets[sock].sendall(json.dumps(packet))
+                elif self.relations[sock] == "cust":
+                    self.sockets[sock].sendall(json.dumps(packet))
 
     def forwarddata(self, srcif, packet):
         if packet[TYPE] != DATA:
             return False
 
-        sock = self.get_route(srcif, packet[DEST])
+        sock, peer = self.get_route(srcif, packet[DEST])
 
         if sock:
-            sock.sendall(json.dumps(packet))
+            fromrelation = self.relations[srcif]
+            torelation = self.relations[peer]
 
-        self.send_error(srcif, packet)
+            if fromrelation == 'cust' or torelation == 'cust':
+                sock.sendall(json.dumps(packet))
+            else:
+                self.send_error(srcif, packet)
+        else:
+                self.send_error(srcif, packet)
 
     def coalesce(self):
         """	coalesce any routes that are right next to each other	"""
@@ -271,6 +286,8 @@ class Router:
                  LPRF: localpref, APTH: aspath, SORG: selforigin}
 
         self.routes.append(entry)
+
+        self.updates.append(packet)
 
         self.forwardupdatesrevokes(srcif, packet)
 
@@ -308,21 +325,30 @@ class Router:
         """	dispatches a packet """
         # TODO
         type = packet[TYPE]
-        if (type == UPDT):
+        if type == UPDT:
             self.update(srcif, packet)
-        elif (type == DATA):
+        elif type == DATA:
             self.forwarddata(srcif, packet)
-        elif (type == DUMP):
+        elif type == DUMP:
             self.dump(packet)
         elif (type == RVKE):
             self.revoke(srcif, packet)
         else:
             return False
+        return True
 
     def send_error(self, conn, msg):
         """ Send a no_route error message """
-        # TODO
-        return False
+        msg[MESG] = {}
+        for sock in self.sockets:
+            if sock == conn:
+                msg[DEST] = msg[SRCE]
+                sockparts = sock.split('.')
+                sockparts.pop()
+                sockparts.insert(3, '1')
+                msg[SRCE] = '.'.join(x.strip() for x in sockparts)
+                msg[TYPE] = "no route"
+                self.sockets[sock].sendall(json.dumps(msg))
 
     def run(self):
         while True:
