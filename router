@@ -277,6 +277,11 @@ class Router:
     def revoke(self, packet):
         """	handle revoke packets	"""
         # TODO
+        print "Hello world/n/n"
+        print self.routes
+
+
+
         return True
 
     def dump(self, packet):
@@ -303,6 +308,8 @@ class Router:
             self.forwarddata(srcif, packet)
         elif (type == DUMP):
             self.dump(packet)
+        elif (type == RVKE):
+            self.revoke(packet)
         else:
             return False
 
