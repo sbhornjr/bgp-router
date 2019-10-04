@@ -192,14 +192,8 @@ class Router:
 
         return outroutes
 
-    def filter_relationships(self, srcif, routes):
-        """ Don't allow Peer->Peer, Peer->Prov, or Prov->Peer forwards """
-        outroutes = []
-        return outroutes
-
     def get_route(self, srcif, daddr):
         """	Select the best route for a given address	"""
-        # TODO
         peer = None
         routes = self.lookup_routes(daddr)
         # Rules go here
@@ -214,8 +208,6 @@ class Router:
             routes = self.get_origin_routes(routes)
             # 5. Lowest IP Address
             routes = self.get_lowest_ip(routes)
-            # Final check: enforce peering relationships
-            #routes = self.filter_relationships(srcif, routes)
             peer = routes[0][PEER]
         elif len(routes) == 1:
             peer = routes[0][PEER]
@@ -273,7 +265,20 @@ class Router:
         # TODO (this is the most difficult task, save until last)
         return False
 
-    def update(self, srcif, packet):
+    def disaggregate(self):
+        """ tear down the routes table and build it again """
+
+        self.routes = []
+
+        for updat in self.updates:
+            self.update(self, updat[SRCE], updat, False)
+
+        for revok in self.revokes:
+            self.revoke(self, revok[SRCE], revok, False)
+
+        self.coalesce()
+
+    def update(self, srcif, packet, dis):
         """	handle update packets	"""
         network = packet[MESG][NTWK]
         netmask = packet[MESG][NMSK]
@@ -287,24 +292,29 @@ class Router:
 
         self.routes.append(entry)
 
-        self.updates.append(packet)
+        if dis:
+            self.updates.append(packet)
+            self.forwardupdatesrevokes(srcif, packet)
 
-        self.forwardupdatesrevokes(srcif, packet)
-
-    def revoke(self, srcif, packet):
+    def revoke(self, srcif, packet, dis):
         """	handle revoke packets	"""
+        if dis:
+            self.revokes.append(packet)
 
-        deadNetworks = []
-        for rev in packet[MESG]:
-            deadNetworks.append(rev["network"])
-        deadRoutes = []
+        revokednetwork = packet[MESG][0][NTWK]
+        deadnetmask = packet[MESG][0][NMSK]
+        deadpeer = packet[SRCE]
+        deadroute = None
+
         for route in self.routes:
-            if route["network"] in deadNetworks:
-                deadRoutes.append(route)
-        for route in deadRoutes:
-            if route["peer"] == packet[SRCE]:
+            if route[NTWK] == revokednetwork and route[NMSK] == deadnetmask and route[PEER] == deadpeer:
+                deadroute = route
                 self.routes.remove(route)
-        self.forwardupdatesrevokes(srcif, packet)
+        if deadroute is None:
+            self.disaggregate()
+
+        if dis:
+            self.forwardupdatesrevokes(srcif, packet)
         return True
 
     def dump(self, packet):
@@ -323,16 +333,15 @@ class Router:
 
     def handle_packet(self, srcif, packet):
         """	dispatches a packet """
-        # TODO
         type = packet[TYPE]
         if type == UPDT:
-            self.update(srcif, packet)
+            self.update(srcif, packet, True)
         elif type == DATA:
             self.forwarddata(srcif, packet)
         elif type == DUMP:
             self.dump(packet)
-        elif (type == RVKE):
-            self.revoke(srcif, packet)
+        elif type == RVKE:
+            self.revoke(srcif, packet, True)
         else:
             return False
         return True
