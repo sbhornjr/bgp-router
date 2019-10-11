@@ -294,49 +294,49 @@ class Router:
         def aggregatable(e1, e2):
             "only run on entries with same net mask length"
 
-            print("\n\n\ncomparing: ")
-            print(e1)
-            print(e2)
+            #print("\n\n\ncomparing: ")
+            #print(e1)
+            #print(e2)
 
             # must have same mask
             if get_mask_length(e1) != get_mask_length(e2):
-                print("mask length mismatch: " + str(get_mask_length(e1)) + " " + str(get_mask_length(e2)))
+                #print("mask length mismatch: " + str(get_mask_length(e1)) + " " + str(get_mask_length(e2)))
                 return False
 
             # must go through same port
             if e1["peer"] != e2["peer"]:
-                print("peer mismatch: " + e1['peer'] + "   " + e2['peer'])
+                #print("peer mismatch: " + e1['peer'] + "   " + e2['peer'])
                 return False
 
             # all unmasked bits except last must match
             if get_last_unmasked_bit(e1) == get_last_unmasked_bit(e2):
                 # last unmasked bit should differ
-                print("final bit match:  e1: " + str(get_last_unmasked_bit(e1)) + "    e2:  " + str(get_last_unmasked_bit(e2)))
+                #print("final bit match:  e1: " + str(get_last_unmasked_bit(e1)) + "    e2:  " + str(get_last_unmasked_bit(e2)))
                 return False
 
 
             for i in range(0, get_mask_length(e1)): #TODO: off by one???
-                print( self.getbinary(e1["network"].split("."))[i] + "   " + self.getbinary(e2["network"].split("."))[i])
+                #print( self.getbinary(e1["network"].split("."))[i] + "   " + self.getbinary(e2["network"].split("."))[i])
 
                 if self.getbinary(e1["network"].split("."))[i] != self.getbinary(e2["network"].split("."))[i]:
                     # mismatched bit at i
-                    print("unmatched at: " + str(i))
+                    #print("unmatched at: " + str(i))
                     if i == get_mask_length(e1) - 1:
                         # unmatched bit is the last unmasked bit, so we can aggregatte
                         netmask = self.getbinary(e1["netmask"].split("."))
                         network = self.getbinary(e1["network"].split("."))
 
-                        print(self.convert( netmask[:netmask.find("0") - 1] + '0' + netmask[netmask.find("0"):]))
-                        print("prenetmask:   " + self.convert(netmask))
+                        #print(self.convert( netmask[:netmask.find("0") - 1] + '0' + netmask[netmask.find("0"):]))
+                        #print("prenetmask:   " + self.convert(netmask))
 
                         # remove 1 bit from netmask in the aggregated entry
                         e1["netmask"] = self.convert( netmask[:netmask.find("0") - 1] + '0' + netmask[netmask.find("0"):])
-                        print("postnetmask:   " + e1['netmask'])
-                        print("prenetwork:    " + self.convert(network))
+                        #print("postnetmask:   " + e1['netmask'])
+                        #print("prenetwork:    " + self.convert(network))
 
                         # adjust the network number for the aggregated entry
                         e1["network"] = self.convert( network[:get_mask_length(e1) ] + '0' + network[get_mask_length(e1)+1:]) #TODO: this passes the test, not sure if its right in genral though
-                        print("postnetwork:    " + e1["network"])
+                        #print("postnetwork:    " + e1["network"])
 
                         self.routes.remove(e2)
                         return True
@@ -344,26 +344,19 @@ class Router:
                         # mismatch not at last bit
                         return False
 
-
-
         def agg():
             for pair in combinations(self.routes, 2):
-                if(aggregatable(pair[0], pair[1])):
+                if aggregatable(pair[0], pair[1]):
                     return True
             return False
-
 
         # for pair in combinations(self.routes, 2):
         #     # print aggregatable(pair[0], pair[1])
         #     if(aggregatable(pair[0], pair[1])):
 
-        while(agg()):
-            print "aggregated"
-
-
-        print("\n\n")
-
-
+        while agg():
+            i = 0
+            #print "aggregated"
 
         return False
 
@@ -373,10 +366,13 @@ class Router:
         self.routes = []
 
         for updat in self.updates:
-            self.update(self, updat[SRCE], updat, False)
+            self.update(updat[SRCE], updat, False)
+
+        print "ROUTING TABLE DISAGG:", self.routes
+        print self.revokes
 
         for revok in self.revokes:
-            self.revoke(self, revok[SRCE], revok, False)
+            self.revoke(revok[SRCE], revok, False)
 
         self.coalesce()
 
@@ -397,8 +393,7 @@ class Router:
         if dis:
             self.updates.append(packet)
             self.forwardupdatesrevokes(srcif, packet)
-           
-        self.coalesce()
+            self.coalesce()
 
     def revoke(self, srcif, packet, dis):
         """	handle revoke packets	"""
@@ -410,11 +405,18 @@ class Router:
         deadpeer = packet[SRCE]
         deadroute = None
 
+        print "UPDATES", self.updates
+
         for route in self.routes:
             if route[NTWK] == revokednetwork and route[NMSK] == deadnetmask and route[PEER] == deadpeer:
                 deadroute = route
                 self.routes.remove(route)
         if deadroute is None:
+            hadroute = False
+            for route in self.updates:
+                if route[MESG][NTWK] == revokednetwork and route[MESG][NMSK] == deadnetmask and route[DEST] == deadpeer:
+                    hadroute = True
+            if hadroute:
             self.disaggregate()
 
         if dis:
@@ -464,7 +466,6 @@ class Router:
                 self.sockets[sock].sendall(json.dumps(msg))
 
     def run(self):
-        print("\n\n\n\n\n\n\n\n")
         while True:
             socks = select.select(self.sockets.values(), [], [], 0.1)[0]
             for conn in socks:
@@ -478,6 +479,8 @@ class Router:
                         if self.sockets[sock] == conn:
                             srcif = sock
                     msg = json.loads(k)
+                    print msg
+                    print "ROUTING TABLE", self.routes
                     if not self.handle_packet(srcif, msg):
                         self.send_error(conn, msg)
                 else:
