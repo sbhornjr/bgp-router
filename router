@@ -301,20 +301,22 @@ class Router:
 
         def aggregatable(e1, e2):
             "only run on entries with same net mask length"
+
             print("\n\n\ncomparing: ")
             print(e1)
             print(e2)
+
             # must have same mask
             if get_mask_length(e1) != get_mask_length(e2):
                 print("mask length mismatch: " + str(get_mask_length(e1)) + " " + str(get_mask_length(e2)))
                 return False
+
             # must go through same port
             if e1["peer"] != e2["peer"]:
                 print("peer mismatch: " + e1['peer'] + "   " + e2['peer'])
                 return False
+
             # all unmasked bits except last must match
-
-
             if get_last_unmasked_bit(e1) == get_last_unmasked_bit(e2):
                 # last unmasked bit should differ
                 print("final bit match:  e1: " + str(get_last_unmasked_bit(e1)) + "    e2:  " + str(get_last_unmasked_bit(e2)))
@@ -339,17 +341,19 @@ class Router:
                         e1["netmask"] = self.convert( netmask[:netmask.find("0") - 1] + '0' + netmask[netmask.find("0"):])
                         print("postnetmask:   " + e1['netmask'])
                         print("prenetwork:    " + self.convert(network))
+
                         # adjust the network number for the aggregated entry
                         e1["network"] = self.convert( network[:get_mask_length(e1) ] + '0' + network[get_mask_length(e1)+1:]) #TODO: this passes the test, not sure if its right in genral though
                         print("postnetwork:    " + e1["network"])
 
-                        #self.routes.remove(e1)
                         self.routes.remove(e2)
-                        #self.routes.append(modified_route)
                         return True
+                    else:
+                        # mismatch not at last bit
+                        return False
 
 
-        #TODO: for loop and mutating table is probably causing this to fail for complex examples
+
         def agg():
             for pair in combinations(self.routes, 2):
                 if(aggregatable(pair[0], pair[1])):
@@ -364,14 +368,6 @@ class Router:
         while(agg()):
             print "aggregated"
 
-
-        # for route in self.routes:
-        #     print(route["netmask"] + "   " + route["network"])
-        #     # print(socket.inet_aton(route["netmask"]) + "   " + socket.inet_aton(route["network"]))
-        #     print(self.getbinary(route["network"].split(".")) + "    " + self.getbinary(route["netmask"].split(".")))
-        #     print(get_mask_length(route))
-        #
-        #     print aggregatable(route, self.routes[0])
 
         print("\n\n")
 
