@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import argparse, socket, time, json, select, struct, math
+import re, sys
+from itertools import combinations
 
 # DEBUG = True
 DEBUG = False
@@ -69,12 +71,30 @@ class Router:
     def getbinary(self, numbers):
         totalbinary = ""
         for num in numbers:
-            binary = bin(int(num))
+            binary = format(int(num), 'b')#bin(int(num))
             while len(binary) < 10:
                 binary = '0' + binary
             totalbinary += binary[2:]
 
         return totalbinary
+
+    #convert function from: http://python.6.x6.nabble.com/Tutor-Convert-an-IP-address-from-binary-to-decimal-td1706883.html
+    def convert(self, bin_ip):
+        patt = re.compile(r'\d{8}')
+        bin_list = patt.findall(str(bin_ip))
+
+        dec_list = []
+        for bin in bin_list:
+            sum = 0
+            i = 7
+            for n in bin:
+                if int(n):
+                    sum = sum + 2 ** i
+                i = i - 1
+            dec_list.append(str(sum))
+
+        dec_ip = '.'.join(dec_list)
+        return dec_ip
 
     def masknetwork(self, network, netmask):
         netmsknum = 0
@@ -271,6 +291,88 @@ class Router:
     def coalesce(self):
         """	coalesce any routes that are right next to each other	"""
         # TODO (this is the most difficult task, save until last)
+
+        def get_mask_length(route):
+            return self.getbinary(route["netmask"].split(".")).count("1")
+
+        def get_last_unmasked_bit(route):
+            # return route['netmask'][route['netmask'].find("*") - 1]
+            return self.getbinary(route["network"].split("."))[get_mask_length(route)-1]#self.getbinary(route['netmask'].split(".")).find("0")]
+
+        def aggregatable(e1, e2):
+            "only run on entries with same net mask length"
+
+            print("\n\n\ncomparing: ")
+            print(e1)
+            print(e2)
+
+            # must have same mask
+            if get_mask_length(e1) != get_mask_length(e2):
+                print("mask length mismatch: " + str(get_mask_length(e1)) + " " + str(get_mask_length(e2)))
+                return False
+
+            # must go through same port
+            if e1["peer"] != e2["peer"]:
+                print("peer mismatch: " + e1['peer'] + "   " + e2['peer'])
+                return False
+
+            # all unmasked bits except last must match
+            if get_last_unmasked_bit(e1) == get_last_unmasked_bit(e2):
+                # last unmasked bit should differ
+                print("final bit match:  e1: " + str(get_last_unmasked_bit(e1)) + "    e2:  " + str(get_last_unmasked_bit(e2)))
+                return False
+
+
+            for i in range(0, get_mask_length(e1)): #TODO: off by one???
+                print( self.getbinary(e1["network"].split("."))[i] + "   " + self.getbinary(e2["network"].split("."))[i])
+
+                if self.getbinary(e1["network"].split("."))[i] != self.getbinary(e2["network"].split("."))[i]:
+                    # mismatched bit at i
+                    print("unmatched at: " + str(i))
+                    if i == get_mask_length(e1) - 1:
+                        # unmatched bit is the last unmasked bit, so we can aggregatte
+                        netmask = self.getbinary(e1["netmask"].split("."))
+                        network = self.getbinary(e1["network"].split("."))
+
+                        print(self.convert( netmask[:netmask.find("0") - 1] + '0' + netmask[netmask.find("0"):]))
+                        print("prenetmask:   " + self.convert(netmask))
+
+                        # remove 1 bit from netmask in the aggregated entry
+                        e1["netmask"] = self.convert( netmask[:netmask.find("0") - 1] + '0' + netmask[netmask.find("0"):])
+                        print("postnetmask:   " + e1['netmask'])
+                        print("prenetwork:    " + self.convert(network))
+
+                        # adjust the network number for the aggregated entry
+                        e1["network"] = self.convert( network[:get_mask_length(e1) ] + '0' + network[get_mask_length(e1)+1:]) #TODO: this passes the test, not sure if its right in genral though
+                        print("postnetwork:    " + e1["network"])
+
+                        self.routes.remove(e2)
+                        return True
+                    else:
+                        # mismatch not at last bit
+                        return False
+
+
+
+        def agg():
+            for pair in combinations(self.routes, 2):
+                if(aggregatable(pair[0], pair[1])):
+                    return True
+            return False
+
+
+        # for pair in combinations(self.routes, 2):
+        #     # print aggregatable(pair[0], pair[1])
+        #     if(aggregatable(pair[0], pair[1])):
+
+        while(agg()):
+            print "aggregated"
+
+
+        print("\n\n")
+
+
+
         return False
 
     def update(self, srcif, packet):
@@ -290,6 +392,8 @@ class Router:
         self.updates.append(packet)
 
         self.forwardupdatesrevokes(srcif, packet)
+
+        self.coalesce()
 
     def revoke(self, srcif, packet):
         """	handle revoke packets	"""
@@ -351,6 +455,7 @@ class Router:
                 self.sockets[sock].sendall(json.dumps(msg))
 
     def run(self):
+        print("\n\n\n\n\n\n\n\n")
         while True:
             socks = select.select(self.sockets.values(), [], [], 0.1)[0]
             for conn in socks:
