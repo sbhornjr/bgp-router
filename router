@@ -301,12 +301,12 @@ class Router:
 
         def aggregatable(e1, e2):
             "only run on entries with same net mask length"
-            print("comparing: ")
+            print("\n\n\ncomparing: ")
             print(e1)
             print(e2)
             # must have same mask
             if get_mask_length(e1) != get_mask_length(e2):
-                print("mask length mismath: " + str(get_mask_length(e1)) + " " + str(get_mask_length(e2)))
+                print("mask length mismatch: " + str(get_mask_length(e1)) + " " + str(get_mask_length(e2)))
                 return False
             # must go through same port
             if e1["peer"] != e2["peer"]:
@@ -346,11 +346,24 @@ class Router:
                         #self.routes.remove(e1)
                         self.routes.remove(e2)
                         #self.routes.append(modified_route)
-                    return False
+                        return True
 
 
-        for pair in combinations(self.routes, 2):
-            print aggregatable(pair[0], pair[1])
+        #TODO: for loop and mutating table is probably causing this to fail for complex examples
+        def agg():
+            for pair in combinations(self.routes, 2):
+                if(aggregatable(pair[0], pair[1])):
+                    return True
+            return False
+
+
+        # for pair in combinations(self.routes, 2):
+        #     # print aggregatable(pair[0], pair[1])
+        #     if(aggregatable(pair[0], pair[1])):
+
+        while(agg()):
+            print "aggregated"
+
 
         # for route in self.routes:
         #     print(route["netmask"] + "   " + route["network"])
@@ -446,6 +459,7 @@ class Router:
                 self.sockets[sock].sendall(json.dumps(msg))
 
     def run(self):
+        print("\n\n\n\n\n\n\n\n")
         while True:
             socks = select.select(self.sockets.values(), [], [], 0.1)[0]
             for conn in socks:
