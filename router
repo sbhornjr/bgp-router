@@ -2,6 +2,7 @@
 
 import argparse, socket, time, json, select, struct, math
 import re, sys
+from itertools import combinations
 
 # DEBUG = True
 DEBUG = False
@@ -295,19 +296,33 @@ class Router:
             return self.getbinary(route["netmask"].split(".")).count("1")
 
         def get_last_unmasked_bit(route):
-            return route['netmask'][route['netmask'].find("*") - 1]
+            # return route['netmask'][route['netmask'].find("*") - 1]
+            return self.getbinary(route["network"].split("."))[get_mask_length(route)-1]#self.getbinary(route['netmask'].split(".")).find("0")]
+
         def aggregatable(e1, e2):
             "only run on entries with same net mask length"
+            print("comparing: ")
+            print(e1)
+            print(e2)
             # must have same mask
             if get_mask_length(e1) != get_mask_length(e2):
+                print("mask length mismath: " + str(get_mask_length(e1)) + " " + str(get_mask_length(e2)))
                 return False
             # must go through same port
             if e1["peer"] != e2["peer"]:
+                print("peer mismatch: " + e1['peer'] + "   " + e2['peer'])
                 return False
             # all unmasked bits except last must match
+
+
+            if get_last_unmasked_bit(e1) == get_last_unmasked_bit(e2):
+                # last unmasked bit should differ
+                print("final bit match:  e1: " + str(get_last_unmasked_bit(e1)) + "    e2:  " + str(get_last_unmasked_bit(e2)))
+                return False
+
+
             for i in range(0, get_mask_length(e1)): #TODO: off by one???
                 print( self.getbinary(e1["network"].split("."))[i] + "   " + self.getbinary(e2["network"].split("."))[i])
-
 
                 if self.getbinary(e1["network"].split("."))[i] != self.getbinary(e2["network"].split("."))[i]:
                     # mismatched bit at i
@@ -331,26 +346,20 @@ class Router:
                         #self.routes.remove(e1)
                         self.routes.remove(e2)
                         #self.routes.append(modified_route)
-
-
                     return False
-            if get_last_unmasked_bit(e1) != get_last_unmasked_bit(e2):
-                # e1['netmask'] = e1['netmask'][0:get_mask_length(e1)-1] #todo create the aggregarte
-                print("unmasked: " + e1["netmask"])
-                print("masked: " + e1)
 
-        print(" \n\n ")
-        # print(self.routes)
-        print("access test: \n\n")
-        for route in self.routes:
-            if route == {}:
-                print "\n\n\nabort\n\n\n"
-            print(route)
-            print(route["netmask"] + "   " + route["network"])
-            # print(socket.inet_aton(route["netmask"]) + "   " + socket.inet_aton(route["network"]))
-            print(self.getbinary(route["network"].split(".")) + "    " + self.getbinary(route["netmask"].split(".")))
-            print(get_mask_length(route))
-            print aggregatable(route, self.routes[0])
+
+        for pair in combinations(self.routes, 2):
+            print aggregatable(pair[0], pair[1])
+
+        # for route in self.routes:
+        #     print(route["netmask"] + "   " + route["network"])
+        #     # print(socket.inet_aton(route["netmask"]) + "   " + socket.inet_aton(route["network"]))
+        #     print(self.getbinary(route["network"].split(".")) + "    " + self.getbinary(route["netmask"].split(".")))
+        #     print(get_mask_length(route))
+        #
+        #     print aggregatable(route, self.routes[0])
+
         print("\n\n")
 
 
