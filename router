@@ -70,10 +70,10 @@ class Router:
         totalbinary = ""
         for num in numbers:
             binary = bin(int(num))
-            while len(binary) < 10:
+            binary = binary[2:]
+            while len(binary) < 8:
                 binary = '0' + binary
-            totalbinary += binary[2:]
-
+            totalbinary += binary
         return totalbinary
 
     def masknetwork(self, network, netmask):
