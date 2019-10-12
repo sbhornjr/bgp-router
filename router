@@ -244,9 +244,10 @@ class Router:
         fromrelation = self.relations[srcif]
 
         for sock in self.sockets:
+            newpacket = {MESG: packet[MESG], SRCE: packet[SRCE], DEST: packet[DEST], TYPE: packet[TYPE]}
             if sock != srcif:
                 destip = sock
-                packet[DEST] = destip
+                newpacket[DEST] = destip
                 srciplist = destip.split(".")
 
                 i = 0
@@ -257,11 +258,11 @@ class Router:
                         srciplist[i] += "."
                         i += 1
                 srcip = "".join(srciplist)
-                packet[SRCE] = srcip
+                newpacket[SRCE] = srcip
                 if fromrelation == "cust":
-                    self.sockets[sock].sendall(json.dumps(packet))
+                    self.sockets[sock].sendall(json.dumps(newpacket))
                 elif self.relations[sock] == "cust":
-                    self.sockets[sock].sendall(json.dumps(packet))
+                    self.sockets[sock].sendall(json.dumps(newpacket))
 
     def forwarddata(self, srcif, packet):
         if packet[TYPE] != DATA:
@@ -368,9 +369,6 @@ class Router:
         for updat in self.updates:
             self.update(updat[SRCE], updat, False)
 
-        print "ROUTING TABLE DISAGG:", self.routes
-        print self.revokes
-
         for revok in self.revokes:
             self.revoke(revok[SRCE], revok, False)
 
@@ -405,8 +403,6 @@ class Router:
         deadpeer = packet[SRCE]
         deadroute = None
 
-        print "UPDATES", self.updates
-
         for route in self.routes:
             if route[NTWK] == revokednetwork and route[NMSK] == deadnetmask and route[PEER] == deadpeer:
                 deadroute = route
@@ -414,10 +410,10 @@ class Router:
         if deadroute is None:
             hadroute = False
             for route in self.updates:
-                if route[MESG][NTWK] == revokednetwork and route[MESG][NMSK] == deadnetmask and route[DEST] == deadpeer:
+                if route[MESG][NTWK] == revokednetwork and route[MESG][NMSK] == deadnetmask and route[SRCE] == deadpeer:
                     hadroute = True
             if hadroute:
-            self.disaggregate()
+                self.disaggregate()
 
         if dis:
             self.forwardupdatesrevokes(srcif, packet)
@@ -479,8 +475,6 @@ class Router:
                         if self.sockets[sock] == conn:
                             srcif = sock
                     msg = json.loads(k)
-                    print msg
-                    print "ROUTING TABLE", self.routes
                     if not self.handle_packet(srcif, msg):
                         self.send_error(conn, msg)
                 else:
