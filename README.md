@@ -1,1 +1,5 @@
 # networks_project2
+ 
+Our high-level approach was pretty self explanatory - we just followed the steps given by the assignment. We first focused on getting the framework of the router up and running with simple test cases passing, then moved on to make things more intricate and complex. Once we understood how the simulator worked with the simpler tests, how we would implement the higher-level features became much more clear. This is how we approached imlementation and testing as well, both level to level (level 1 leading to level 2, for example) and within levels (coalesce-simple leading to coalesce-complex, for example). 
+ 
+Most of the major challenges we ran into involved bug fixing, mostly with stupid mistakes but there were some instances where we had trouble on a higher level. For example, trying to figure out when/how to aggregate and disaggregate was probably the most challenging part of the assignment, and since they were such complex processes, they also lead to more small, pesky bugs that took a while to fix.
